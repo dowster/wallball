@@ -16,7 +16,7 @@ function json(data, status = 200) {
 
 function randomCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return Array.from(bytes, byte => ALPHABET[byte & 31]).join('');
+  return Array.from(bytes, (byte) => ALPHABET[byte & 31]).join('');
 }
 
 async function createRoom(env) {
@@ -25,9 +25,11 @@ async function createRoom(env) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = randomCode();
     const room = env.ROOMS.get(env.ROOMS.idFromName(code));
-    const result = await room.fetch(new Request('https://room/create', {
-      method: 'POST',
-    }));
+    const result = await room.fetch(
+      new Request('https://room/create', {
+        method: 'POST',
+      }),
+    );
 
     if (result.status === 409) continue;
 
@@ -111,9 +113,10 @@ export class GameRoom {
 
       this.room = RoomSession.restore(saved);
       const activeConnections = new Map(
-        ctx.getWebSockets()
-          .filter(socket => socket.readyState === SOCKET_OPEN)
-          .map(socket => {
+        ctx
+          .getWebSockets()
+          .filter((socket) => socket.readyState === SOCKET_OPEN)
+          .map((socket) => {
             const { slot, connectionId } = socket.deserializeAttachment();
             return [slot, connectionId];
           }),
@@ -177,9 +180,12 @@ export class GameRoom {
   async openSocket(request, now) {
     // The token identifies the reserved seat, not an identity supplied in input.
     // It travels in the handshake header, so invite URLs contain no seat token.
-    const protocols = request.headers.get('Sec-WebSocket-Protocol')
-      ?.split(',').map(protocol => protocol.trim()) || [];
-    const token = protocols.find(protocol => protocol.startsWith('session.'))?.slice(8);
+    const protocols =
+      request.headers
+        .get('Sec-WebSocket-Protocol')
+        ?.split(',')
+        .map((protocol) => protocol.trim()) || [];
+    const token = protocols.find((protocol) => protocol.startsWith('session.'))?.slice(8);
     if (!protocols.includes('wallball') || !token) {
       return json({ error: 'Missing player session.' }, 401);
     }
@@ -202,16 +208,22 @@ export class GameRoom {
     this.log('player_connected', { slot });
 
     for (const old of this.ctx.getWebSockets()) {
-      if (old !== server && old.deserializeAttachment().slot === slot && old.readyState === SOCKET_OPEN) {
+      if (
+        old !== server &&
+        old.deserializeAttachment().slot === slot &&
+        old.readyState === SOCKET_OPEN
+      ) {
         old.close(4001, 'Connected in another tab.');
       }
     }
 
-    server.send(JSON.stringify({
-      type: 'welcome',
-      slot,
-      state: this.room.snapshot(),
-    }));
+    server.send(
+      JSON.stringify({
+        type: 'welcome',
+        slot,
+        state: this.room.snapshot(),
+      }),
+    );
     await this.changed();
 
     return new Response(null, {
@@ -330,7 +342,11 @@ export class GameRoom {
     for (const socket of this.ctx.getWebSockets()) {
       const { slot, connectionId } = socket.deserializeAttachment();
       const seat = this.room.slots[slot];
-      if (seat?.connected && seat.connectionId === connectionId && now - seat.lastSeen > HEARTBEAT_TIMEOUT) {
+      if (
+        seat?.connected &&
+        seat.connectionId === connectionId &&
+        now - seat.lastSeen > HEARTBEAT_TIMEOUT
+      ) {
         this.room.disconnect(slot, connectionId, now);
         socket.close(4000, 'Connection timed out.');
       }

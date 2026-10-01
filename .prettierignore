@@ -1,0 +1,10 @@
+node_modules/
+web-dist/
+.wrangler/
+playwright-report/
+test-results/
+package-lock.json
+# Preserve the original Java/NetBeans project as historical reference.
+src/
+nbproject/
+dist/

@@ -29,7 +29,10 @@ export function parseMessage(raw) {
   if (message.type !== 'input' || !validDirection || !validSequence) {
     throw new Error('Invalid input.');
   }
-  if (message.target != null && (!Number.isFinite(message.target) || message.target < 0 || message.target > HEIGHT)) {
+  if (
+    message.target != null &&
+    (!Number.isFinite(message.target) || message.target < 0 || message.target > HEIGHT)
+  ) {
     throw new Error('Invalid target.');
   }
 
@@ -83,7 +86,7 @@ export class RoomSession {
   }
 
   connect(token, connectionId, now) {
-    const slot = this.slots.findIndex(seat => seat?.token === token);
+    const slot = this.slots.findIndex((seat) => seat?.token === token);
     if (slot < 0 || this.phase === 'expired' || now >= this.expiresAt) {
       throw new Error('This room or player session has expired.');
     }
@@ -95,7 +98,7 @@ export class RoomSession {
       this.phase = 'paused';
       this.match.status = 'paused';
       this.reason = 'A player reconnected. Both players must choose Resume.';
-      this.slots.forEach(player => {
+      this.slots.forEach((player) => {
         player.ready = false;
         player.direction = 0;
         player.target = null;
@@ -115,11 +118,12 @@ export class RoomSession {
       rateCount: 0,
     });
 
-    if (this.phase === 'disconnected' && this.slots.every(player => player?.connected)) {
+    if (this.phase === 'disconnected' && this.slots.every((player) => player?.connected)) {
       this.phase = this.match.status === 'over' ? 'over' : 'paused';
-      this.reason = this.phase === 'over'
-        ? 'Both players must choose Rematch.'
-        : 'Reconnected. Both players must choose Resume.';
+      this.reason =
+        this.phase === 'over'
+          ? 'Both players must choose Rematch.'
+          : 'Reconnected. Both players must choose Resume.';
       this.expiresAt = now + LOBBY_TIMEOUT;
     }
     return slot;
@@ -128,14 +132,19 @@ export class RoomSession {
   disconnect(slot, connectionId, now) {
     const seat = this.slots[slot];
     // Ignore a replaced socket's delayed close; it no longer owns this seat.
-    if (!seat || seat.connectionId !== connectionId || !seat.connected || this.phase === 'expired') {
+    if (
+      !seat ||
+      seat.connectionId !== connectionId ||
+      !seat.connected ||
+      this.phase === 'expired'
+    ) {
       return;
     }
 
     seat.connected = false;
     seat.direction = 0;
     seat.target = null;
-    this.slots.forEach(player => {
+    this.slots.forEach((player) => {
       if (player) player.ready = false;
     });
     this.phase = 'disconnected';
@@ -182,7 +191,7 @@ export class RoomSession {
       this.match.status = 'paused';
       this.reason = 'Both players must choose Resume to continue.';
       this.expiresAt = now + LOBBY_TIMEOUT;
-      this.slots.forEach(player => {
+      this.slots.forEach((player) => {
         if (!player) return;
         player.ready = false;
         player.direction = 0;
@@ -193,12 +202,12 @@ export class RoomSession {
     // Start, resume and rematch all require consent from both connected players.
     if (message.type === 'ready' && ['waiting', 'paused', 'over'].includes(this.phase)) {
       seat.ready = true;
-      if (this.slots.every(player => player?.connected && player.ready)) {
+      if (this.slots.every((player) => player?.connected && player.ready)) {
         if (this.phase === 'over') this.match = new Match({ mode: 'duo' });
         this.match.status = 'playing';
         this.phase = 'playing';
         this.reason = null;
-        this.slots.forEach(player => {
+        this.slots.forEach((player) => {
           player.ready = false;
           player.direction = 0;
           player.target = null;
@@ -233,7 +242,9 @@ export class RoomSession {
     if (this.match.status === 'over') {
       this.phase = 'over';
       this.reason = 'Both players must choose Rematch to play again.';
-      this.slots.forEach(seat => { seat.ready = false; });
+      this.slots.forEach((seat) => {
+        seat.ready = false;
+      });
     }
   }
 
@@ -241,7 +252,7 @@ export class RoomSession {
     this.phase = 'expired';
     this.reason = reason;
     if (this.match.status !== 'over') this.match.status = 'paused';
-    this.slots.forEach(seat => {
+    this.slots.forEach((seat) => {
       if (!seat) return;
       seat.ready = false;
       seat.direction = 0;
@@ -257,14 +268,14 @@ export class RoomSession {
       phase: this.phase,
       reason: this.reason,
       expiresAt: this.expiresAt,
-      players: this.slots.map(seat => ({
+      players: this.slots.map((seat) => ({
         connected: !!seat?.connected,
         ready: !!seat?.ready,
         ack: seat?.seq ?? -1,
       })),
       match: {
-        players: match.players.map(player => ({ ...player })),
-        balls: match.balls.map(ball => ({ ...ball })),
+        players: match.players.map((player) => ({ ...player })),
+        balls: match.balls.map((ball) => ({ ...ball })),
         time: match.time,
         serveIn: match.serveIn,
         powerup: match.powerup && { ...match.powerup },
