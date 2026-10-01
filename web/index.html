@@ -1,27 +1,183 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101318"><meta name="description" content="WallBall: a browser arcade game. Rally against the computer or challenge a friend, and collect power-ups.">
-  <title>WallBall — keep the rally alive</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header><a href="./" class="brand" aria-label="WallBall home"><span class="brand-mark">W</span> WALL<span>BALL</span></a><span class="tag">THE CLASSIC, REBOUNDED <span class="dot"></span></span></header>
-  <main>
-    <section class="intro"><div><p class="eyebrow">A LITTLE COMPETITION. A LOT OF BOUNCE.</p><h1>Keep the rally <em>alive.</em></h1><p class="subtitle">Two paddles. Ten lives. One more game.</p></div><span class="edition">EST. 2017<br><b>BROWSER EDITION</b></span></section>
-    <section class="arcade" aria-label="WallBall game">
-      <div class="scoreboard"><div class="player left"><span id="left-name">PLAYER 01</span><strong id="left-score">00</strong><small id="left-lives">10 lives</small></div><div class="match-info"><span class="live-dot"></span><span id="match-label">READY TO RALLY</span><small id="effect-label">POWER-UPS ENABLED</small></div><div class="player right"><span id="right-name">COMPUTER</span><strong id="right-score">00</strong><small id="right-lives">10 lives</small></div></div>
-      <div id="room-bar" class="room-bar" hidden><div><span>PRIVATE ROOM</span><strong id="active-room-code"></strong><small id="your-seat"></small></div><div class="invite"><label class="sr-only" for="invite-link">Invite link</label><input id="invite-link" readonly><button id="copy-invite" type="button">Copy invite</button><button id="leave-room" type="button">Leave</button></div></div><div class="court"><canvas id="game" width="800" height="500" tabindex="0" aria-label="Game court. Player one uses W and S. Player two uses arrow keys. Space pauses."></canvas>
-        <div id="overlay" class="overlay"><div class="overlay-card"><span class="eyebrow" id="overlay-kicker">YOUR NEXT HIGH SCORE STARTS HERE</span><h2 id="overlay-title">Meet your match.</h2><p id="overlay-description">Return the ball. Collect power-ups.<br>Be the last paddle standing.</p><div id="setup"><fieldset><legend>Choose your opponent</legend><div class="mode-picker"><button type="button" id="solo" aria-pressed="true">01 <span>Solo play</span></button><button type="button" id="duo" aria-label="Two players" aria-pressed="false">02 <span>Local 2P</span></button><button type="button" id="online" aria-pressed="false">03 <span>Online</span></button></div></fieldset><label class="difficulty-label" for="difficulty">Computer difficulty<select id="difficulty"><option value="0">Easy</option><option value="1" selected>Medium</option><option value="2">Hard</option><option value="3">Very hard</option><option value="4">Expert</option></select></label><div id="online-setup" hidden><button id="create-room" type="button" class="primary">CREATE A PRIVATE ROOM</button><div class="join-room"><label class="sr-only" for="room-code">Room code</label><input id="room-code" placeholder="FRIEND’S ROOM CODE" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="join-room" type="button">JOIN</button></div><p class="online-note">Share a room link. Play from anywhere.</p></div></div><p id="connection-error" role="alert" hidden></p><button id="start" class="primary">LET’S PLAY <span aria-hidden="true">&gt;</span></button><button id="back" class="text-button" hidden>Back to menu</button></div></div>
-      </div>
-      <div class="court-footer"><span id="control-hint"><kbd>W</kbd> <kbd>S</kbd> <span class="control-label">LEFT PADDLE</span> <span class="control-divider">/</span> <kbd>UP</kbd> <kbd>DOWN</kbd> <span class="control-label">RIGHT PADDLE</span></span><button id="pause" disabled><span id="pause-text">Pause</span> <kbd>SPACE</kbd></button></div>
-      <div class="touch-controls"><div><span id="touch-player-name">Player 01</span><button data-player="0" data-direction="-1" aria-label="Player one up"><span class="arrow up" aria-hidden="true"></span></button><button data-player="0" data-direction="1" aria-label="Player one down"><span class="arrow down" aria-hidden="true"></span></button></div><div id="right-touch"><span>Player 02</span><button data-player="1" data-direction="-1" aria-label="Player two up"><span class="arrow up" aria-hidden="true"></span></button><button data-player="1" data-direction="1" aria-label="Player two down"><span class="arrow down" aria-hidden="true"></span></button></div></div>
-    </section>
-    <section class="details"><div><span class="number">01 / THE RULES</span><h3>Every return counts.</h3><p>Earn a point each time you return the ball. Miss it and lose a life. You start with ten — the last player standing wins.</p></div><div><span class="number">02 / THE TWIST</span><h3>A little extra in your corner.</h3><p>Hit a power-up with the ball to claim it for the last player to return it. Change paddle size, ball speed, and more.</p></div><div><span class="number">03 / THE CONTROLS</span><h3>Pick up. Play. Repeat.</h3><p>Use W / S or the on-screen controls. In solo and online modes, you can also drag on the court. Space pauses; Escape returns to the menu.</p></div></section>
-    <details class="powerup-guide"><summary>The power-up lineup <span>+</span></summary><div id="powerup-list"></div></details>
-    <p id="announcement" class="sr-only" aria-live="polite"></p>
-  </main>
-  <footer><span>WALLBALL <span class="muted">/</span> BUILT FOR THE LOVE OF THE GAME.</span><span>A 2017 project by James Etten, Michael Schmidt &amp; Brady Dow.</span></footer>
-  <script type="module" src="app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101318" />
+    <meta
+      name="description"
+      content="WallBall: a browser arcade game. Rally against the computer or challenge a friend, and collect power-ups."
+    />
+    <title>WallBall — keep the rally alive</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="./" class="brand" aria-label="WallBall home"
+        ><span class="brand-mark">W</span> WALL<span>BALL</span></a
+      ><span class="tag">THE CLASSIC, REBOUNDED <span class="dot"></span></span>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">A LITTLE COMPETITION. A LOT OF BOUNCE.</p>
+          <h1>Keep the rally <em>alive.</em></h1>
+          <p class="subtitle">Two paddles. Ten lives. One more game.</p>
+        </div>
+        <span class="edition">EST. 2017<br /><b>BROWSER EDITION</b></span>
+      </section>
+      <section class="arcade" aria-label="WallBall game">
+        <div class="scoreboard">
+          <div class="player left">
+            <span id="left-name">PLAYER 01</span><strong id="left-score">00</strong
+            ><small id="left-lives">10 lives</small>
+          </div>
+          <div class="match-info">
+            <span class="live-dot"></span><span id="match-label">READY TO RALLY</span
+            ><small id="effect-label">POWER-UPS ENABLED</small>
+          </div>
+          <div class="player right">
+            <span id="right-name">COMPUTER</span><strong id="right-score">00</strong
+            ><small id="right-lives">10 lives</small>
+          </div>
+        </div>
+        <div id="room-bar" class="room-bar" hidden>
+          <div>
+            <span>PRIVATE ROOM</span><strong id="active-room-code"></strong
+            ><small id="your-seat"></small>
+          </div>
+          <div class="invite">
+            <label class="sr-only" for="invite-link">Invite link</label
+            ><input id="invite-link" readonly /><button id="copy-invite" type="button">
+              Copy invite</button
+            ><button id="leave-room" type="button">Leave</button>
+          </div>
+        </div>
+        <div class="court">
+          <canvas
+            id="game"
+            width="800"
+            height="500"
+            tabindex="0"
+            aria-label="Game court. Player one uses W and S. Player two uses arrow keys. Space pauses."
+          ></canvas>
+          <div id="overlay" class="overlay">
+            <div class="overlay-card">
+              <span class="eyebrow" id="overlay-kicker">YOUR NEXT HIGH SCORE STARTS HERE</span>
+              <h2 id="overlay-title">Meet your match.</h2>
+              <p id="overlay-description">
+                Return the ball. Collect power-ups.<br />Be the last paddle standing.
+              </p>
+              <div id="setup">
+                <fieldset>
+                  <legend>Choose your opponent</legend>
+                  <div class="mode-picker">
+                    <button type="button" id="solo" aria-pressed="true">
+                      01 <span>Solo play</span></button
+                    ><button type="button" id="duo" aria-label="Two players" aria-pressed="false">
+                      02 <span>Local 2P</span></button
+                    ><button type="button" id="online" aria-pressed="false">
+                      03 <span>Online</span>
+                    </button>
+                  </div>
+                </fieldset>
+                <label class="difficulty-label" for="difficulty"
+                  >Computer difficulty<select id="difficulty">
+                    <option value="0">Easy</option>
+                    <option value="1" selected>Medium</option>
+                    <option value="2">Hard</option>
+                    <option value="3">Very hard</option>
+                    <option value="4">Expert</option>
+                  </select></label
+                >
+                <div id="online-setup" hidden>
+                  <button id="create-room" type="button" class="primary">
+                    CREATE A PRIVATE ROOM
+                  </button>
+                  <div class="join-room">
+                    <label class="sr-only" for="room-code">Room code</label
+                    ><input
+                      id="room-code"
+                      placeholder="FRIEND’S ROOM CODE"
+                      maxlength="10"
+                      autocomplete="off"
+                      autocapitalize="characters"
+                      spellcheck="false"
+                    /><button id="join-room" type="button">JOIN</button>
+                  </div>
+                  <p class="online-note">Share a room link. Play from anywhere.</p>
+                </div>
+              </div>
+              <p id="connection-error" role="alert" hidden></p>
+              <button id="start" class="primary">
+                LET’S PLAY <span aria-hidden="true">&gt;</span></button
+              ><button id="back" class="text-button" hidden>Back to menu</button>
+            </div>
+          </div>
+        </div>
+        <div class="court-footer">
+          <span id="control-hint"
+            ><kbd>W</kbd> <kbd>S</kbd> <span class="control-label">LEFT PADDLE</span>
+            <span class="control-divider">/</span> <kbd>UP</kbd> <kbd>DOWN</kbd>
+            <span class="control-label">RIGHT PADDLE</span></span
+          ><button id="pause" disabled><span id="pause-text">Pause</span> <kbd>SPACE</kbd></button>
+        </div>
+        <div class="touch-controls">
+          <div>
+            <span id="touch-player-name">Player 01</span
+            ><button data-player="0" data-direction="-1" aria-label="Player one up">
+              <span class="arrow up" aria-hidden="true"></span></button
+            ><button data-player="0" data-direction="1" aria-label="Player one down">
+              <span class="arrow down" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div id="right-touch">
+            <span>Player 02</span
+            ><button data-player="1" data-direction="-1" aria-label="Player two up">
+              <span class="arrow up" aria-hidden="true"></span></button
+            ><button data-player="1" data-direction="1" aria-label="Player two down">
+              <span class="arrow down" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="details">
+        <div>
+          <span class="number">01 / THE RULES</span>
+          <h3>Every return counts.</h3>
+          <p>
+            Earn a point each time you return the ball. Miss it and lose a life. You start with ten
+            — the last player standing wins.
+          </p>
+        </div>
+        <div>
+          <span class="number">02 / THE TWIST</span>
+          <h3>A little extra in your corner.</h3>
+          <p>
+            Hit a power-up with the ball to claim it for the last player to return it. Change paddle
+            size, ball speed, and more.
+          </p>
+        </div>
+        <div>
+          <span class="number">03 / THE CONTROLS</span>
+          <h3>Pick up. Play. Repeat.</h3>
+          <p>
+            Use W / S or the on-screen controls. In solo and online modes, you can also drag on the
+            court. Space pauses; Escape returns to the menu.
+          </p>
+        </div>
+      </section>
+      <details class="powerup-guide">
+        <summary>The power-up lineup <span>+</span></summary>
+        <div id="powerup-list"></div>
+      </details>
+      <p id="announcement" class="sr-only" aria-live="polite"></p>
+    </main>
+    <footer>
+      <span>WALLBALL <span class="muted">/</span> BUILT FOR THE LOVE OF THE GAME.</span
+      ><span>A 2017 project by James Etten, Michael Schmidt &amp; Brady Dow.</span>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
 </html>

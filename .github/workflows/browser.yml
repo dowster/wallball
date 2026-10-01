@@ -1,7 +1,7 @@
 name: Browser game
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -19,6 +19,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
@@ -42,5 +43,27 @@ jobs:
       - name: Deploy game, Durable Objects and static assets
         run: npm run deploy
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-preview:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Deploy isolated branch preview
+        id: preview
+        run: npm run deploy:preview
+        env:
+          PREVIEW_BRANCH: ${{ github.ref_name }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

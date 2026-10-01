@@ -1,101 +1,246 @@
-export const WIDTH = 800, HEIGHT = 500;
-export const POWERUPS = [
-  ['ExtraLife', 'Extra life'], ['FastBall', 'Fast ball'], ['SlowBall', 'Slow ball'],
-  ['GrowPaddle', 'Grow paddle'], ['ShrinkPaddle', 'Shrink paddle'], ['FastPaddle', 'Fast paddle'],
-  ['GrowBall', 'Grow ball'], ['ShrinkBall', 'Shrink ball'], ['MultiBall', 'Multiball'],
-];
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+import {
+  WIDTH,
+  HEIGHT,
+  PADDLE_HEIGHT,
+  PADDLE_SPEED,
+  PADDLE_BOUNDARY,
+  BALL_SPEED,
+  BALL_RADIUS,
+  MAX_BALLS,
+  MAX_LIVES,
+  SERVE_DELAY,
+  EFFECT_DURATION,
+  POWERUP_LIFETIME,
+  POWERUPS,
+  clamp,
+} from './constants.js';
+import { CpuController } from './cpu.js';
+
+// Existing browser/server consumers can keep importing these from the engine.
+export { WIDTH, HEIGHT, POWERUPS } from './constants.js';
+const PHYSICS_STEP = 1 / 240;
+const MAX_FRAME_TIME = 0.1;
+
 export class Match {
   constructor({ mode = 'solo', difficulty = 1, random = Math.random } = {}) {
-    this.mode = mode; this.difficulty = difficulty; this.random = random;
-    this.players = [0, 1].map(() => ({ y: HEIGHT / 2, height: 70, speed: 300, lives: 10, points: 0 }));
-    this.balls = []; this.time = 0; this.serveIn = 1; this.powerup = null; this.effect = null;
-    this.status = 'playing'; this.winner = null; this.nextBallId = 1;
+    this.mode = mode;
+    this.difficulty = difficulty;
+    this.random = random;
+    this.cpu = mode === 'solo' ? new CpuController(difficulty, random) : null;
+    this.players = [0, 1].map(() => ({
+      y: HEIGHT / 2,
+      height: PADDLE_HEIGHT,
+      speed: PADDLE_SPEED,
+      lives: 10,
+      points: 0,
+    }));
+    this.balls = [];
+    this.time = 0;
+    this.serveIn = SERVE_DELAY;
+    this.powerup = null;
+    this.effect = null;
+    this.status = 'playing';
+    this.winner = null;
+    this.nextBallId = 1;
   }
+
   spawnBall() {
-    const type = this.effect?.type;
-    const speed = type === 'FastBall' ? 1.6 : type === 'SlowBall' ? .7 : 1;
-    this.balls.push({ id: this.nextBallId++, x: WIDTH / 2, y: HEIGHT / 2, vx: (this.random() < .5 ? -1 : 1) * 280 * speed, vy: (this.random() - .5) * 220, radius: type === 'GrowBall' ? 14 : type === 'ShrinkBall' ? 4 : 8 });
+    const effect = this.effect?.type;
+    let speedMultiplier = 1;
+    let radius = BALL_RADIUS;
+    if (effect === 'FastBall') speedMultiplier = 1.6;
+    if (effect === 'SlowBall') speedMultiplier = 0.7;
+    if (effect === 'GrowBall') radius = 14;
+    if (effect === 'ShrinkBall') radius = 4;
+
+    this.balls.push({
+      id: this.nextBallId++,
+      x: WIDTH / 2,
+      y: HEIGHT / 2,
+      vx: (this.random() < 0.5 ? -1 : 1) * BALL_SPEED * speedMultiplier,
+      vy: (this.random() - 0.5) * 220,
+      radius,
+    });
   }
-  pause() { if (this.status === 'playing') this.status = 'paused'; else if (this.status === 'paused') this.status = 'playing'; }
-  step(dt, input = {}) {
-    if (this.status !== 'playing' || dt <= 0) return;
-    // Small physics steps prevent tunneling even with fast-ball powerups.
-    let remaining = Math.min(dt, .1);
+
+  pause() {
+    if (this.status === 'playing') this.status = 'paused';
+    else if (this.status === 'paused') this.status = 'playing';
+  }
+
+  step(seconds, input = {}) {
+    if (this.status !== 'playing' || seconds <= 0) return;
+
+    // Limit large frame gaps and split movement into small collision steps.
+    // This prevents a fast ball from passing completely through a paddle.
+    let remaining = Math.min(seconds, MAX_FRAME_TIME);
     while (remaining > 0 && this.status === 'playing') {
-      const tick = Math.min(remaining, 1 / 240); this.tick(tick, input); remaining -= tick;
+      const elapsed = Math.min(remaining, PHYSICS_STEP);
+      this.tick(elapsed, input);
+      remaining -= elapsed;
     }
   }
-  tick(dt, input) {
-    this.time += dt;
-    if (this.effect && this.time >= this.effect.until) this.clearEffect();
-    if (this.powerup && this.time >= this.powerup.until) this.powerup = null;
-    this.players.forEach((p, i) => {
-      let direction = input[i] || 0;
-      if (i === 1 && this.mode === 'solo') {
-        const approaching = this.balls.filter(b => b.vx > 0).sort((a,b) => b.x - a.x)[0];
-        const reaction = [590, 480, 360, 220, 0][this.difficulty];
-        const target = approaching && approaching.x > reaction ? approaching.y : HEIGHT / 2;
-        direction = Math.abs(target - p.y) > 9 ? Math.sign(target - p.y) : 0;
-      }
-      if (input.targets?.[i] != null && !(i === 1 && this.mode === 'solo')) p.y = input.targets[i];
-      else p.y += direction * p.speed * dt * (i === 1 && this.mode === 'solo' ? [.6, .8, 1, 1.15, 1.35][this.difficulty] : 1);
-      p.y = clamp(p.y, p.height / 2, HEIGHT - p.height / 2);
-    });
+
+  tick(seconds, input) {
+    this.time += seconds;
+    this.expirePowerups();
+    this.movePlayers(seconds, input);
+
     if (!this.balls.length) {
-      this.serveIn -= dt;
+      this.serveIn -= seconds;
       if (this.serveIn <= 0) this.spawnBall();
     }
-    const survivors = [], initialCount = this.balls.length;
-    for (const b of this.balls.slice()) {
-      const previousX = b.x;
-      b.x += b.vx * dt; b.y += b.vy * dt;
-      if (b.y < b.radius) { b.y = b.radius; b.vy = Math.abs(b.vy); }
-      if (b.y > HEIGHT - b.radius) { b.y = HEIGHT - b.radius; b.vy = -Math.abs(b.vy); }
-      const side = b.vx < 0 ? 0 : 1, p = this.players[side];
-      const boundary = side === 0 ? 30 : WIDTH - 30;
-      if ((side === 0 ? previousX - b.radius >= boundary && b.x - b.radius <= boundary : previousX + b.radius <= boundary && b.x + b.radius >= boundary) && Math.abs(b.y - p.y) <= p.height / 2 + b.radius) {
-        b.x = boundary + (side === 0 ? b.radius : -b.radius);
-        b.vx = Math.abs(b.vx) * (side === 0 ? 1 : -1);
-        b.vy = clamp((b.y - p.y) / (p.height / 2), -1, 1) * 280;
-        p.points++;
-        if (!this.powerup && !this.effect) this.spawnPowerup();
+    this.moveBalls(seconds);
+  }
+
+  expirePowerups() {
+    if (this.effect && this.time >= this.effect.until) this.clearEffect();
+    if (this.powerup && this.time >= this.powerup.until) this.powerup = null;
+  }
+
+  movePlayers(seconds, input) {
+    this.players.forEach((player, slot) => {
+      const computer = slot === 1 && this.cpu;
+      const direction = computer
+        ? this.cpu.direction(this.balls, player, this.time)
+        : input[slot] || 0;
+      const target = input.targets?.[slot];
+
+      if (target != null && !computer) {
+        // Local solo/duo dragging is immediate. Remote touch controls are
+        // converted to bounded direction input by RoomSession on the server.
+        player.y = target;
+      } else {
+        const speedMultiplier = computer ? this.cpu.settings.speed : 1;
+        player.y += direction * player.speed * speedMultiplier * seconds;
       }
-      if (b.x < -b.radius || b.x > WIDTH + b.radius) {
-        const loser = b.x < 0 ? 0 : 1;
-        this.players[loser].lives = Math.max(0, this.players[loser].lives - 1);
-        if (!this.players[loser].lives) { this.status = 'over'; this.winner = 1 - loser; }
-        this.serveIn = 1;
+      player.y = clamp(player.y, player.height / 2, HEIGHT - player.height / 2);
+    });
+  }
+
+  moveBalls(seconds) {
+    const survivors = [];
+    const originalCount = this.balls.length;
+
+    // Collecting Multiball appends a ball. Process only the original balls
+    // this step, then preserve any additions for the next step.
+    for (const ball of this.balls.slice()) {
+      const previousX = ball.x;
+      ball.x += ball.vx * seconds;
+      ball.y += ball.vy * seconds;
+      this.bounceWalls(ball);
+      this.bouncePaddle(ball, previousX);
+
+      if (ball.x < -ball.radius || ball.x > WIDTH + ball.radius) {
+        this.miss(ball.x < 0 ? 0 : 1);
         continue;
       }
-      if (this.powerup && Math.hypot(b.x - this.powerup.x, b.y - this.powerup.y) < b.radius + 18) this.collect(b.vx > 0 ? 0 : 1, b);
-      survivors.push(b);
+
+      if (
+        this.powerup &&
+        Math.hypot(ball.x - this.powerup.x, ball.y - this.powerup.y) < ball.radius + 18
+      ) {
+        // Travel direction identifies the last player to return the ball.
+        this.collect(ball.vx > 0 ? 0 : 1, ball);
+      }
+      survivors.push(ball);
     }
-    // collect() can add a ball; keep it without processing it twice this tick.
-    this.balls = [...survivors, ...this.balls.slice(initialCount)];
+    this.balls = [...survivors, ...this.balls.slice(originalCount)];
   }
+
+  bounceWalls(ball) {
+    if (ball.y < ball.radius) {
+      ball.y = ball.radius;
+      ball.vy = Math.abs(ball.vy);
+    }
+    if (ball.y > HEIGHT - ball.radius) {
+      ball.y = HEIGHT - ball.radius;
+      ball.vy = -Math.abs(ball.vy);
+    }
+  }
+
+  bouncePaddle(ball, previousX) {
+    const slot = ball.vx < 0 ? 0 : 1;
+    const player = this.players[slot];
+    const boundary = slot === 0 ? PADDLE_BOUNDARY : WIDTH - PADDLE_BOUNDARY;
+    const crossedPaddle =
+      slot === 0
+        ? previousX - ball.radius >= boundary && ball.x - ball.radius <= boundary
+        : previousX + ball.radius <= boundary && ball.x + ball.radius >= boundary;
+    const withinPaddle = Math.abs(ball.y - player.y) <= player.height / 2 + ball.radius;
+
+    // Crossing is required: moving into a ball already behind you cannot save it.
+    if (!crossedPaddle || !withinPaddle) return;
+
+    ball.x = boundary + (slot === 0 ? ball.radius : -ball.radius);
+    ball.vx = Math.abs(ball.vx) * (slot === 0 ? 1 : -1);
+    const contactOffset = (ball.y - player.y) / (player.height / 2);
+    ball.vy = clamp(contactOffset, -1, 1) * BALL_SPEED;
+    player.points++;
+    if (!this.powerup && !this.effect) this.spawnPowerup();
+  }
+
+  miss(slot) {
+    const player = this.players[slot];
+    player.lives = Math.max(0, player.lives - 1);
+    this.serveIn = SERVE_DELAY;
+    if (!player.lives) {
+      this.status = 'over';
+      this.winner = 1 - slot;
+    }
+  }
+
   spawnPowerup() {
-    this.powerup = { type: POWERUPS[Math.floor(this.random() * POWERUPS.length)][0], x: 180 + this.random() * 440, y: 70 + this.random() * 360, until: this.time + 15 };
+    this.powerup = {
+      type: POWERUPS[Math.floor(this.random() * POWERUPS.length)][0],
+      x: 180 + this.random() * 440,
+      y: 70 + this.random() * 360,
+      until: this.time + POWERUP_LIFETIME,
+    };
   }
+
   collect(owner, ball) {
-    const type = this.powerup.type, p = this.players[owner]; this.powerup = null;
-    if (type === 'ExtraLife') { p.lives = Math.min(15, p.lives + 1); return; }
-    if (type === 'MultiBall') { if (this.balls.length < 8) this.balls.push({ ...ball, id: this.nextBallId++, vx: -ball.vx, vy: -ball.vy || 100 }); return; }
-    this.effect = { type, owner, until: this.time + 12 };
-    if (type === 'GrowPaddle') p.height = 105;
-    if (type === 'ShrinkPaddle') p.height = 45;
-    if (type === 'FastPaddle') p.speed = 480;
-    for (const b of this.balls) {
-      if (type === 'FastBall' || type === 'SlowBall') b.vx *= type === 'FastBall' ? 1.6 : .7;
-      if (type === 'GrowBall' || type === 'ShrinkBall') b.radius = type === 'GrowBall' ? 14 : 4;
+    const type = this.powerup.type;
+    const player = this.players[owner];
+    this.powerup = null;
+
+    if (type === 'ExtraLife') {
+      player.lives = Math.min(MAX_LIVES, player.lives + 1);
+      return;
+    }
+    if (type === 'MultiBall') {
+      if (this.balls.length < MAX_BALLS) {
+        this.balls.push({
+          ...ball,
+          id: this.nextBallId++,
+          vx: -ball.vx,
+          vy: -ball.vy || 100,
+        });
+      }
+      return;
+    }
+
+    this.effect = { type, owner, until: this.time + EFFECT_DURATION };
+    if (type === 'GrowPaddle') player.height = 105;
+    if (type === 'ShrinkPaddle') player.height = 45;
+    if (type === 'FastPaddle') player.speed = 480;
+    for (const activeBall of this.balls) {
+      if (type === 'FastBall') activeBall.vx *= 1.6;
+      if (type === 'SlowBall') activeBall.vx *= 0.7;
+      if (type === 'GrowBall') activeBall.radius = 14;
+      if (type === 'ShrinkBall') activeBall.radius = 4;
     }
   }
+
   clearEffect() {
     const { type, owner } = this.effect;
-    this.players[owner].height = 70; this.players[owner].speed = 300;
-    for (const b of this.balls) {
-      if (type === 'FastBall' || type === 'SlowBall') b.vx /= type === 'FastBall' ? 1.6 : .7;
-      b.radius = 8;
+    this.players[owner].height = PADDLE_HEIGHT;
+    this.players[owner].speed = PADDLE_SPEED;
+    for (const ball of this.balls) {
+      // Invert the exact speed multiplier to avoid accumulating rounding drift.
+      if (type === 'FastBall') ball.vx /= 1.6;
+      if (type === 'SlowBall') ball.vx /= 0.7;
+      ball.radius = BALL_RADIUS;
     }
     this.effect = null;
   }
