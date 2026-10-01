@@ -10,12 +10,12 @@ export class Match {
     this.mode = mode; this.difficulty = difficulty; this.random = random;
     this.players = [0, 1].map(() => ({ y: HEIGHT / 2, height: 70, speed: 300, lives: 10, points: 0 }));
     this.balls = []; this.time = 0; this.serveIn = 1; this.powerup = null; this.effect = null;
-    this.status = 'playing'; this.winner = null;
+    this.status = 'playing'; this.winner = null; this.nextBallId = 1;
   }
   spawnBall() {
     const type = this.effect?.type;
     const speed = type === 'FastBall' ? 1.6 : type === 'SlowBall' ? .7 : 1;
-    this.balls.push({ x: WIDTH / 2, y: HEIGHT / 2, vx: (this.random() < .5 ? -1 : 1) * 280 * speed, vy: (this.random() - .5) * 220, radius: type === 'GrowBall' ? 14 : type === 'ShrinkBall' ? 4 : 8 });
+    this.balls.push({ id: this.nextBallId++, x: WIDTH / 2, y: HEIGHT / 2, vx: (this.random() < .5 ? -1 : 1) * 280 * speed, vy: (this.random() - .5) * 220, radius: type === 'GrowBall' ? 14 : type === 'ShrinkBall' ? 4 : 8 });
   }
   pause() { if (this.status === 'playing') this.status = 'paused'; else if (this.status === 'paused') this.status = 'playing'; }
   step(dt, input = {}) {
@@ -80,7 +80,7 @@ export class Match {
   collect(owner, ball) {
     const type = this.powerup.type, p = this.players[owner]; this.powerup = null;
     if (type === 'ExtraLife') { p.lives = Math.min(15, p.lives + 1); return; }
-    if (type === 'MultiBall') { this.balls.push({ ...ball, vx: -ball.vx, vy: -ball.vy || 100 }); return; }
+    if (type === 'MultiBall') { if (this.balls.length < 8) this.balls.push({ ...ball, id: this.nextBallId++, vx: -ball.vx, vy: -ball.vy || 100 }); return; }
     this.effect = { type, owner, until: this.time + 12 };
     if (type === 'GrowPaddle') p.height = 105;
     if (type === 'ShrinkPaddle') p.height = 45;

@@ -22,7 +22,11 @@ test('all powerups collect and timed effects restore exact defaults', () => {
     const g=match(); g.spawnBall(); const b=g.balls[0]; g.players[0].lives=10;
     g.powerup={type}; g.collect(0,b);
     if(type==='ExtraLife') assert.equal(g.players[0].lives,11);
-    else if(type==='MultiBall') {assert.equal(g.balls.length,2); assert.notEqual(g.balls[0],g.balls[1]);}
+    else if(type==='MultiBall') {
+      assert.equal(g.balls.length,2); assert.notEqual(g.balls[0],g.balls[1]);
+      for(let i=0;i<10;i++) {g.powerup={type};g.collect(0,b);}
+      assert.equal(g.balls.length,8); assert.equal(new Set(g.balls.map(ball=>ball.id)).size,8);
+    }
     else {
       if(type==='ShrinkBall') assert.equal(b.radius,4);
       if(type==='FastBall') assert.equal(Math.abs(b.vx),448);
