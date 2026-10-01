@@ -126,14 +126,40 @@ a casual arcade game, not a competitive match ledger.
 
 ## Logs and troubleshooting
 
-Persistent Workers logs and invocation logs are enabled in `wrangler.jsonc`,
-with full sampling. Room creation, connections, disconnections, phase changes,
+Persistent application logs are enabled in `wrangler.jsonc`, with full sampling.
+Automatic invocation logs are disabled: Cloudflare must not create an invocation
+log for every WebSocket input or heartbeat. Room creation, connections, disconnections, phase changes,
 match end, invalid messages, and expiry emit structured logs with a Durable
 Object ID and seat number. Application logs omit reconnect tokens, invite URLs,
 raw messages, and per-frame snapshots.
 
 View **Workers & Pages → wallball → Logs / Observability** in Cloudflare, or use
-`npx wrangler tail` after authenticating. Full invocation logging can produce
-many events during active matches; sampling can be reduced in the config if
-needed. `/api/health` and `/wallball/api/health` return `{"multiplayer":true}` once
+`npx wrangler tail` after authenticating. Normal paddle inputs, heartbeats and snapshots do not emit application logs;
+only room lifecycle events and errors do. `/api/health` and `/wallball/api/health` return `{"multiplayer":true}` once
 the backend is deployed. A route/DNS change alone does not deploy new code.
+
+
+## What stays alive?
+
+The browser starts an HTTP WebSocket upgrade request. The routing Worker maps
+its room code to a Durable Object ID and forwards the handshake. `GameRoom`
+creates a `WebSocketPair`, accepts its server endpoint with the hibernation API,
+and returns the browser endpoint in a `101 Switching Protocols` response.
+Cloudflare then delivers frames to that object's `webSocketMessage` method;
+they do not run through the routing Worker's HTTP handler again.
+
+A Durable Object is a uniquely addressed stateful actor, with one active
+instance owning a room. It is not a dedicated VM or an immortal Node process.
+Cloudflare manages its location, execution, connections and durable storage.
+Both players reach the same room owner, which keeps their authoritative match
+in memory and advances physics with a timer. That timer keeps an active match
+awake. When the timer stops for waiting/paused/finished rooms, the object can
+hibernate while Cloudflare holds its WebSocket connections open.
+
+When a message or alarm wakes a hibernated room, Cloudflare creates a new JS
+instance. Its constructor reloads the stored checkpoint and recovers socket
+seat identities from serialized attachments. Durable means the object's
+identity and saved state survive eviction; it does not mean every memory update
+is automatically persisted or that a connection can never drop. A platform
+restart can lose up to five seconds of unsaved match state, and a broken socket
+uses the reconnect flow.
